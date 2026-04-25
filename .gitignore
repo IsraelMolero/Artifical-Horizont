@@ -1,4 +1,23 @@
-ArtificialHorizon.cache
-ArtificialHorizon.ip_user_files
-ArtificialHorizon.hw
-ArtificialHorizon.sim 
+*.log
+*.jou
+*.str
+*.os
+*.dir
+.Xil/
+.srcs/sources_1/ip/*
+! .srcs/sources_1/ip/**/*.xci
+
+*.jou
+*.log
+*.pb
+*.dcp
+*.rpt
+*.bit
+*.bin
+
+ArtificialHorizon.cache/
+ArtificialHorizon.hw/
+ArtificialHorizon.ioplanning/
+ArtificialHorizon.ip_user_files/
+ArtificialHorizon.runs/
+ArtificialHorizon.sim/
