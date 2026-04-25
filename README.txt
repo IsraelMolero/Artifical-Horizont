@@ -12,8 +12,7 @@ Representación gráfica:
 Controlador VGA:
 - Implementación VGA, doble buffer, hsync, vsync, etc.
 
-
-Altimetro:
+Altímetro:
 - Seleccionar sensor de presión analógico
 - ADC
 - Conversión valor ADC a presión atmosférica
