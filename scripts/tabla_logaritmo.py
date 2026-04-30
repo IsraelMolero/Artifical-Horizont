@@ -13,7 +13,9 @@ with open("codigo_rom.txt", "w") as archivo:
         h = const_log * math.log(P0 / P)
         
         if i < 4095:
-            archivo.write(f"    {i} => {int(h)},\n")
+            archivo.write(f"    {i} => {int(h)},")
+            if(i % 8 == 0 and i > 0):
+                archivo.write(f"\n")
         else:
             archivo.write(f"    {i} => {int(h)}\n") 
             
