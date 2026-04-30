@@ -26,10 +26,10 @@ use IEEE.NUMERIC_STD.ALL;
 entity calculo_altura is
     Port ( 
         clk        : in  STD_LOGIC;
-        
+
         adc_data12 : in  STD_LOGIC_VECTOR (11 downto 0); 
         
-        altura_m   : out STD_LOGIC_VECTOR (15 downto 0)  
+        altura_m   : out STD_LOGIC_VECTOR (15 downto 0)
     );
 end calculo_altura;
 
