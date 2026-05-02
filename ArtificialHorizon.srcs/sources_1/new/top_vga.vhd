@@ -1,37 +1,6 @@
-----------------------------------------------------------------------------------
--- Company: 
--- Engineer: 
--- 
--- Create Date: 30.04.2026 00:35:33
--- Design Name: 
--- Module Name: top_vga - Behavioral
--- Project Name: 
--- Target Devices: 
--- Tool Versions: 
--- Description: 
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
-----------------------------------------------------------------------------------
-
-
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if using
--- arithmetic functions with Signed or Unsigned values
---use IEEE.NUMERIC_STD.ALL;
-
--- Uncomment the following library declaration if instantiating
--- any Xilinx leaf cells in this code.
---library UNISIM;
---use UNISIM.VComponents.all;
-
 
 entity top_vga is
     Port (
@@ -45,7 +14,8 @@ entity top_vga is
 end top_vga;
 
 architecture Structural of top_vga is
-
+	constant display_size: integer := 400;
+	constant line_width: integer := 4;
     component clk_div_25
         Port (
             clk100 : in  STD_LOGIC;
@@ -63,12 +33,28 @@ architecture Structural of top_vga is
             y        : out unsigned(9 downto 0)
         );
     end component;
+    
+    component linear_engine
+        port(
+            x      : in unsigned;
+            y      : in unsigned;
+            output : out std_logic;
+            pitch  : in unsigned(7 downto 0);
+            roll   : in unsigned(7 downto 0);
+            clk    : in std_logic
+        );
+    end component;
 
     signal clk25_s    : STD_LOGIC;
     signal video_on_s : STD_LOGIC;
     signal x_s        : unsigned(9 downto 0);
     signal y_s        : unsigned(9 downto 0);
-
+    signal engine_out : STD_LOGIC;
+    signal pitch_s    : unsigned(7 downto 0) := x"00";
+    signal roll_s     : unsigned(7 downto 0) := x"00";
+    -- señal para aumentar el roll cada cierto tiempo, prueba
+	signal roll_counter : unsigned(27 downto 0) := (others => '0');
+	
 begin
 
     U1: clk_div_25
@@ -86,11 +72,38 @@ begin
             x        => x_s,
             y        => y_s
         );
+        
+   	U3: linear_engine
+        port map (
+            x      => x_s,
+            y      => y_s,
+            output => engine_out,
+            pitch  => pitch_s,
+            roll   => roll_s,
+            clk    => clk25_s
+        );
+	
+	-- Process para aumentar roll para probar comportamiento
+	process(clk25_s)
+    begin
+        if rising_edge(clk25_s) then
+            roll_counter <= roll_counter + 1;
+        end if;
+    end process;
 
-    process(video_on_s, y_s)
+    roll_s <= roll_counter(27 downto 20);
+    
+    
+    process(video_on_s, y_s, engine_out)
     begin
         if video_on_s = '1' then
-            if y_s < 240 then
+        	-- 200 para display de 400x400 (antes 240)
+        	-- pintamos linea blanca para dibujar centro vertical del hotizonte
+        	if y_s > display_size / 2 - line_width / 2 and y_s < display_size / 2 + line_width / 2 then
+        		vgaRed   <= "1111";
+                vgaGreen <= "1111";
+                vgaBlue  <= "1111";
+            elsif engine_out = '1' then
                 vgaRed   <= "0000";
                 vgaGreen <= "0110";
                 vgaBlue  <= "1111";
@@ -107,3 +120,7 @@ begin
     end process;
 
 end Structural;
+
+
+
+
