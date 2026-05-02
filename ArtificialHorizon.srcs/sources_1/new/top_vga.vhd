@@ -9,7 +9,10 @@ entity top_vga is
         vgaGreen : out STD_LOGIC_VECTOR(3 downto 0);
         vgaBlue  : out STD_LOGIC_VECTOR(3 downto 0);
         Hsync    : out STD_LOGIC;
-        Vsync    : out STD_LOGIC
+        Vsync    : out STD_LOGIC;
+        -- para el display de 7 segmentos
+        seg      : out STD_LOGIC_VECTOR(6 downto 0);
+        an       : out STD_LOGIC_VECTOR(3 downto 0)
     );
 end top_vga;
 
@@ -44,6 +47,15 @@ architecture Structural of top_vga is
             clk    : in std_logic
         );
     end component;
+    
+    component seven_segment_display
+		port(
+			clk   : in std_logic;
+			value : in unsigned(13 downto 0);
+			seg   : out std_logic_vector(6 downto 0);
+			an    : out std_logic_vector(3 downto 0)
+    	);
+    end component;
 
     signal clk25_s    : STD_LOGIC;
     signal video_on_s : STD_LOGIC;
@@ -53,7 +65,7 @@ architecture Structural of top_vga is
     signal pitch_s    : unsigned(7 downto 0) := x"00";
     signal roll_s     : unsigned(7 downto 0) := x"00";
     -- señal para aumentar el roll cada cierto tiempo, prueba
-	signal roll_counter : unsigned(27 downto 0) := (others => '0');
+	signal roll_counter : unsigned(28 downto 0) := (others => '0');
 	-- El linear engine tarda 4 ciclos en calcular el
 	-- output, necesitamos 4 ciclos de retraso para 
 	-- que la imagen se vea bien en el display
@@ -64,6 +76,8 @@ architecture Structural of top_vga is
     signal vsync_delay  : std_logic_vector(3 downto 0);
     signal v_on_delay   : std_logic_vector(3 downto 0);
     signal y_s_delay    : unsigned(39 downto 0);
+    -- para el display de 7 segmentos
+    signal display_val : unsigned(13 downto 0);
 	
 begin
 
@@ -92,6 +106,15 @@ begin
             roll   => roll_s,
             clk    => clk25_s
         );
+        
+    U4: seven_segment_display
+    	port map(
+    		clk => clk,
+			value => display_val,
+            seg   => seg,
+            an    => an
+    	);
+	display_val <= resize(roll_s, 14);
 	
 	-- Process para aumentar roll para probar comportamiento
 	process(clk25_s)
@@ -101,7 +124,7 @@ begin
         end if;
     end process;
 
-    roll_s <= roll_counter(27 downto 20);
+    roll_s <= roll_counter(28 downto 21);
     
 	process(clk25_s)
     begin
@@ -114,7 +137,7 @@ begin
     end process;
     -- Usar las señales retrasadas
     Hsync <= hsync_delay(3);
-    Vsync <= vsync_delay(3);    
+    Vsync <= vsync_delay(3);
     
     process(v_on_delay, y_s_delay, engine_out)
         variable y_actual : unsigned(9 downto 0);

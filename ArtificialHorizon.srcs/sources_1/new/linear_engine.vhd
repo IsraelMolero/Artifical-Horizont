@@ -25,7 +25,7 @@ begin
             prod_x <= x_rel * sin;
             prod_y <= y_rel * cos;
 
-            res_intermedio <= prod_x - prod_y + signed(pitch & "00000000"); 
+            res_intermedio <= prod_x - prod_y + signed(pitch & "00000000");
             
             if res_intermedio < 0 then
                 output <= '0';
