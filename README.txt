@@ -1,23 +1,35 @@
 TODO LIST:
 
 IMU 9 grados BNO055:
-- Controlador I2C, máquina de estados con todos los casos
+- Controlador UART
 - Extracción datos tramas y guardado en registros
-
-Representación gráfica:
-- Dibujado vídeo buffer en BRAM en base a registros
-    - Algoritmo CORDIC (difícil) o LUT con senos y cosenos (fácil)
-    - Uso de coma fija en lugar de floats
-
-Controlador VGA:
-- Implementación VGA, doble buffer, hsync, vsync, etc.
 
 Altímetro:
 - Seleccionar sensor de presión analógico
-- ADC
-- Conversión valor ADC a presión atmosférica
-- Conversión presión a altura
-- Representación en display de 7 segmentos
+- ADC -> arreglar error pin (reset_in)
 
+Testbenches de todos los módulos
+
+Reescribir top.vhd
+
+Brújula
+- Switch para cambiar entre altura y brújula
+- (Opcional) Flecha para representar orientación.
+
+--------------------------------------------------------
+
+HITO 2:
+
+Terminar de probar VGA.
+
+Testear 7 segmentos con brújula y altura
+
+--------------------------------------------------------
+
+HITO 3:
+
+Implementar UART en la IMU.
+
+Implementar sensor de altura.
 
 
