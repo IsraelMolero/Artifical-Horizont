@@ -2,7 +2,6 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
-
 entity linear_engine is
 	port(x, y : in unsigned; output : out std_logic; pitch, roll : in unsigned(7 downto 0); clk : in std_logic);
 end linear_engine;
@@ -19,6 +18,7 @@ begin
     process(clk)
     begin
         if rising_edge(clk) then
+        	-- Ecuación normal de la recta
             x_rel <= signed("0" & x) - 200;
             y_rel <= signed("0" & y) - 200;
 
@@ -35,3 +35,6 @@ begin
         end if;
     end process;
 end Behavioral;
+
+
+

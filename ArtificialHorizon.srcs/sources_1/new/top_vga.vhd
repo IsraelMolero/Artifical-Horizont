@@ -54,6 +54,16 @@ architecture Structural of top_vga is
     signal roll_s     : unsigned(7 downto 0) := x"00";
     -- señal para aumentar el roll cada cierto tiempo, prueba
 	signal roll_counter : unsigned(27 downto 0) := (others => '0');
+	-- El linear engine tarda 4 ciclos en calcular el
+	-- output, necesitamos 4 ciclos de retraso para 
+	-- que la imagen se vea bien en el display
+	-- señales sincronizacion
+	signal Hsync_internal : std_logic;
+    signal Vsync_internal : std_logic;
+	signal hsync_delay  : std_logic_vector(3 downto 0);
+    signal vsync_delay  : std_logic_vector(3 downto 0);
+    signal v_on_delay   : std_logic_vector(3 downto 0);
+    signal y_s_delay    : unsigned(39 downto 0);
 	
 begin
 
@@ -63,15 +73,15 @@ begin
             clk25  => clk25_s
         );
 
-    U2: vga_sync
-        port map (
-            clk25    => clk25_s,
-            hsync    => Hsync,
-            vsync    => Vsync,
-            video_on => video_on_s,
-            x        => x_s,
-            y        => y_s
-        );
+	U2: vga_sync
+		port map (
+			clk25    => clk25_s,
+			hsync    => Hsync_internal,
+			vsync    => Vsync_internal,
+			video_on => video_on_s,
+			x        => x_s,
+			y        => y_s
+		);
         
    	U3: linear_engine
         port map (
@@ -93,14 +103,30 @@ begin
 
     roll_s <= roll_counter(27 downto 20);
     
-    
-    process(video_on_s, y_s, engine_out)
+	process(clk25_s)
     begin
-        if video_on_s = '1' then
-        	-- 200 para display de 400x400 (antes 240)
-        	-- pintamos linea blanca para dibujar centro vertical del hotizonte
-        	if y_s > display_size / 2 - line_width / 2 and y_s < display_size / 2 + line_width / 2 then
-        		vgaRed   <= "1111";
+        if rising_edge(clk25_s) then
+            hsync_delay <= hsync_delay(2 downto 0) & Hsync_internal;
+            vsync_delay <= vsync_delay(2 downto 0) & Vsync_internal;
+            v_on_delay  <= v_on_delay(2 downto 0)  & video_on_s;
+            y_s_delay   <= y_s_delay(29 downto 0)  & y_s;
+        end if;
+    end process;
+    -- Usar las señales retrasadas
+    Hsync <= hsync_delay(3);
+    Vsync <= vsync_delay(3);    
+    
+    process(v_on_delay, y_s_delay, engine_out)
+        variable y_actual : unsigned(9 downto 0);
+        variable v_on     : std_logic;
+    begin
+        y_actual := y_s_delay(39 downto 30);
+        v_on     := v_on_delay(3);
+
+        if v_on = '1' then
+            if y_actual > (display_size / 2 - line_width / 2) and 
+               y_actual < (display_size / 2 + line_width / 2) then
+                vgaRed   <= "1111";
                 vgaGreen <= "1111";
                 vgaBlue  <= "1111";
             elsif engine_out = '1' then
@@ -118,7 +144,6 @@ begin
             vgaBlue  <= "0000";
         end if;
     end process;
-
 end Structural;
 
 
