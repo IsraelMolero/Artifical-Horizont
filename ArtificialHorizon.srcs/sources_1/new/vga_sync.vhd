@@ -63,7 +63,7 @@ begin
         end if;
     end process;
     -- video_on <= '1' when (h_count < 640 and v_count < 480) else '0';
-    video_on <= '1' when (h_count < 400 and v_count < 400) else '0';
+    video_on <= '1' when (h_count >= 120 and h_count < 520 and v_count >= 40 and v_count < 440) else '0';
 
     hsync <= '0' when (h_count >= 656 and h_count < 752) else '1';
     vsync <= '0' when (v_count >= 490 and v_count < 492) else '1';
