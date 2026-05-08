@@ -4,179 +4,86 @@ use IEEE.NUMERIC_STD.ALL;
 
 entity top_vga is
     Port (
-        clk      : in  STD_LOGIC;
-        vgaRed   : out STD_LOGIC_VECTOR(3 downto 0);
-        vgaGreen : out STD_LOGIC_VECTOR(3 downto 0);
-        vgaBlue  : out STD_LOGIC_VECTOR(3 downto 0);
-        Hsync    : out STD_LOGIC;
-        Vsync    : out STD_LOGIC;
-        -- para el display de 7 segmentos
-        seg      : out STD_LOGIC_VECTOR(6 downto 0);
-        an       : out STD_LOGIC_VECTOR(3 downto 0)
+        clk25      : in  STD_LOGIC;
+        engine_out : in  STD_LOGIC;
+        x_out      : out unsigned(9 downto 0);
+        y_out      : out unsigned(9 downto 0);
+        vgaRed     : out STD_LOGIC_VECTOR(3 downto 0);
+        vgaGreen   : out STD_LOGIC_VECTOR(3 downto 0);
+        vgaBlue    : out STD_LOGIC_VECTOR(3 downto 0);
+        Hsync      : out STD_LOGIC;
+        Vsync      : out STD_LOGIC
     );
 end top_vga;
 
-architecture Structural of top_vga is
-	constant display_size: integer := 400;
-	constant line_width: integer := 4;
-    component clk_div_25
-        Port (
-            clk100 : in  STD_LOGIC;
-            clk25  : out STD_LOGIC
-        );
-    end component;
+architecture Behavioral of top_vga is
+    constant display_size: integer := 400;
+    constant line_width: integer := 2;
 
-    component vga_sync
-        Port (
-            clk25    : in  STD_LOGIC;
-            hsync    : out STD_LOGIC;
-            vsync    : out STD_LOGIC;
-            video_on : out STD_LOGIC;
-            x        : out unsigned(9 downto 0);
-            y        : out unsigned(9 downto 0)
-        );
-    end component;
-    
-    component linear_engine
-        port(
-            x      : in unsigned;
-            y      : in unsigned;
-            output : out std_logic;
-            pitch  : in unsigned(7 downto 0);
-            roll   : in unsigned(7 downto 0);
-            clk    : in std_logic
-        );
-    end component;
-    
-    component seven_segment_display
-		port(
-			clk   : in std_logic;
-			value : in unsigned(13 downto 0);
-			seg   : out std_logic_vector(6 downto 0);
-			an    : out std_logic_vector(3 downto 0)
-    	);
-    end component;
-    
-    signal clk25_s    : STD_LOGIC;
-    signal video_on_s : STD_LOGIC;
-    signal x_s        : unsigned(9 downto 0);
-    signal y_s        : unsigned(9 downto 0);
-    signal engine_out : STD_LOGIC;
-    signal pitch_s    : unsigned(7 downto 0) := x"00";
-    signal roll_s     : unsigned(7 downto 0) := x"00";
-    
-    -- señal para aumentar el roll cada cierto tiempo, prueba
-    
-	signal roll_counter : unsigned(28 downto 0) := (others => '0');
-	
-	-- El linear engine tarda 4 ciclos en calcular el
-	-- output, necesitamos 4 ciclos de retraso para 
-	-- que la imagen se vea bien en el display
-	-- señales sincronizacion
-	
-	signal Hsync_internal : std_logic;
-    signal Vsync_internal : std_logic;
-	signal hsync_delay  : std_logic_vector(3 downto 0);
-    signal vsync_delay  : std_logic_vector(3 downto 0);
-    signal v_on_delay   : std_logic_vector(3 downto 0);
-    signal y_s_delay    : unsigned(39 downto 0);
-    
-    -- para el display de 7 segmentos
-    signal display_val : unsigned(13 downto 0);
-        
-    -- contador divisor adc
-    signal adc_counter   : unsigned(23 downto 0) := (others => '0');
-    signal adc_clk_state : std_logic := '0';
-	
+    -- Señales internas del vga_sync
+    signal hsync_s, vsync_s, v_on_s : STD_LOGIC;
+    signal x_s, y_s : unsigned(9 downto 0);
+
+    -- Señales de retraso
+    signal hsync_delay : std_logic_vector(3 downto 0);
+    signal vsync_delay : std_logic_vector(3 downto 0);
+    signal v_on_delay  : std_logic_vector(3 downto 0);
+    signal y_s_delay   : unsigned(39 downto 0);
+
 begin
 
-    U1: clk_div_25
+    -- Instancia de tu vga_sync original
+    U_SYNC: entity work.vga_sync
         port map (
-            clk100 => clk,
-            clk25  => clk25_s
+            clk25    => clk25,
+            hsync    => hsync_s,
+            vsync    => vsync_s,
+            video_on => v_on_s,
+            x        => x_s,
+            y        => y_s
         );
 
-	U2: vga_sync
-		port map (
-			clk25    => clk25_s,
-			hsync    => Hsync_internal,
-			vsync    => Vsync_internal,
-			video_on => video_on_s,
-			x        => x_s,
-			y        => y_s
-		);
-        
-   	U3: linear_engine
-        port map (
-            x      => x_s,
-            y      => y_s,
-            output => engine_out,
-            pitch  => pitch_s,
-            roll   => roll_s,
-            clk    => clk25_s
-        );
-        
-    U4: seven_segment_display
-    	port map(
-    		clk => clk,
-			value => display_val,
-            seg   => seg,
-            an    => an
-    	);
-	display_val <= resize(roll_s, 14);
-		
-	-- Process para aumentar roll para probar comportamiento
-	process(clk25_s)
-    begin
-        if rising_edge(clk25_s) then
-            roll_counter <= roll_counter + 1;
-        end if;
-    end process;
+    -- Exponemos las coordenadas hacia el exterior
+    x_out <= x_s;
+    y_out <= y_s;
 
-    roll_s <= roll_counter(28 downto 21);
-    
-	process(clk25_s)
+    -- Lógica de Retrasos
+    process(clk25)
     begin
-        if rising_edge(clk25_s) then
-            hsync_delay <= hsync_delay(2 downto 0) & Hsync_internal;
-            vsync_delay <= vsync_delay(2 downto 0) & Vsync_internal;
-            v_on_delay  <= v_on_delay(2 downto 0)  & video_on_s;
+        if rising_edge(clk25) then
+            hsync_delay <= hsync_delay(2 downto 0) & hsync_s;
+            vsync_delay <= vsync_delay(2 downto 0) & vsync_s;
+            v_on_delay  <= v_on_delay(2 downto 0)  & v_on_s;
             y_s_delay   <= y_s_delay(29 downto 0)  & y_s;
         end if;
     end process;
-    -- Usar las señales retrasadas
-    Hsync <= hsync_delay(3);
-    Vsync <= vsync_delay(3);
-    
-    process(v_on_delay, y_s_delay, engine_out)
+
+    -- Lógica de dibujado
+    process(v_on_delay, engine_out, y_s_delay)
         variable y_actual : unsigned(9 downto 0);
-        variable v_on     : std_logic;
     begin
         y_actual := y_s_delay(39 downto 30);
-        v_on     := v_on_delay(3);
 
-        if v_on = '1' then
-            if y_actual > (display_size / 2 - line_width / 2) and 
-               y_actual < (display_size / 2 + line_width / 2) then
-                vgaRed   <= "1111";
-                vgaGreen <= "1111";
-                vgaBlue  <= "1111";
-            elsif engine_out = '1' then
-                vgaRed   <= "0000";
-                vgaGreen <= "0110";
-                vgaBlue  <= "1111";
-            else
-                vgaRed   <= "1001";
-                vgaGreen <= "0100";
-                vgaBlue  <= "0000";
-            end if;
+        if v_on_delay(3) = '0' then
+            -- Fuera de pantalla
+            vgaRed <= "0000"; vgaGreen <= "0000"; vgaBlue <= "0000";
         else
-            vgaRed   <= "0000";
-            vgaGreen <= "0000";
-            vgaBlue  <= "0000";
+            -- Área de dibujo
+            if y_actual > (display_size/2 - line_width/2) and y_actual < (display_size/2 + line_width/2) then
+                vgaRed <= "1111"; vgaGreen <= "1111"; vgaBlue <= "1111";
+            elsif engine_out = '1' then
+                vgaRed <= "0000"; vgaGreen <= "0110"; vgaBlue <= "1111";
+            else
+                vgaRed <= "1001"; vgaGreen <= "0100"; vgaBlue <= "0000";
+            end if;
         end if;
     end process;
-end Structural;
+
+    -- salidas finales
+    Hsync <= hsync_delay(3);
+    Vsync <= vsync_delay(3);
+
+end Behavioral;
 
 
 
