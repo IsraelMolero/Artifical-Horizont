@@ -56,7 +56,7 @@ architecture Structural of top_vga is
 			an    : out std_logic_vector(3 downto 0)
     	);
     end component;
-
+    
     signal clk25_s    : STD_LOGIC;
     signal video_on_s : STD_LOGIC;
     signal x_s        : unsigned(9 downto 0);
@@ -64,20 +64,29 @@ architecture Structural of top_vga is
     signal engine_out : STD_LOGIC;
     signal pitch_s    : unsigned(7 downto 0) := x"00";
     signal roll_s     : unsigned(7 downto 0) := x"00";
+    
     -- señal para aumentar el roll cada cierto tiempo, prueba
+    
 	signal roll_counter : unsigned(28 downto 0) := (others => '0');
+	
 	-- El linear engine tarda 4 ciclos en calcular el
 	-- output, necesitamos 4 ciclos de retraso para 
 	-- que la imagen se vea bien en el display
 	-- señales sincronizacion
+	
 	signal Hsync_internal : std_logic;
     signal Vsync_internal : std_logic;
 	signal hsync_delay  : std_logic_vector(3 downto 0);
     signal vsync_delay  : std_logic_vector(3 downto 0);
     signal v_on_delay   : std_logic_vector(3 downto 0);
     signal y_s_delay    : unsigned(39 downto 0);
+    
     -- para el display de 7 segmentos
     signal display_val : unsigned(13 downto 0);
+        
+    -- contador divisor adc
+    signal adc_counter   : unsigned(23 downto 0) := (others => '0');
+    signal adc_clk_state : std_logic := '0';
 	
 begin
 
@@ -115,7 +124,7 @@ begin
             an    => an
     	);
 	display_val <= resize(roll_s, 14);
-	
+		
 	-- Process para aumentar roll para probar comportamiento
 	process(clk25_s)
     begin
