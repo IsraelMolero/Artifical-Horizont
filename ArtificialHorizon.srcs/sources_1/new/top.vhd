@@ -68,6 +68,29 @@ begin
             clk25  => clk25_s
         );
 
+   -- NEW Israel -> Usamos el core y el sensor control del I2C de la liberia que hemos importado
+    U_SENSOR_READER: entity work.bmi160_reader
+        generic map (
+            FREQ_G     => 100.0,
+            I2C_FREQ_G => 0.4
+        )
+        port map (
+            clk_i        => clk,
+            rst_i        => '0',
+            start_read_i => '1',
+            accel_x_o    => accel_x_s,
+            accel_y_o    => accel_y_s,
+            accel_z_o    => open, 
+            data_ready_o => open,
+            scl_io       => scl_io,
+            sda_io       => sda_io
+        );
+
+    pitch_s <= unsigned(accel_x_s(15 downto 8));
+    roll_s  <= unsigned(accel_y_s(15 downto 8));
+
+
+
     -- Controlador VGA
     U_VGA_CTRL: entity work.top_vga
         port map (
