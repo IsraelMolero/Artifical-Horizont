@@ -300,4 +300,13 @@ set_property PACKAGE_PIN V4 [get_ports {an[2]}]
 	set_property IOSTANDARD LVCMOS33 [get_ports {an[2]}]
 set_property PACKAGE_PIN W4 [get_ports {an[3]}]					
 	set_property IOSTANDARD LVCMOS33 [get_ports {an[3]}]
+	
+	
+##I2C para BMI160
+set_property PACKAGE_PIN A14 [get_ports scl]					
+	set_property IOSTANDARD LVCMOS33 [get_ports scl]
+	set_property PULLUP true [get_ports scl]
+set_property PACKAGE_PIN A16 [get_ports sda]					
+	set_property IOSTANDARD LVCMOS33 [get_ports sda]
+	set_property PULLUP true [get_ports sda]
 

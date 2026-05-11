@@ -6,15 +6,13 @@
 -- Each module is governed by its own copyright statement.
 --**********************************************************************
 
-library IEEE, XESS;
+library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
+use IEEE.math_real.all;
+use work.CommonPckg.all;
 
 package I2cPckg is
-
-  constant LO  : std_logic := '0';
-  constant HI  : std_logic := '1';
-  constant HIZ : std_logic := 'Z';
 
   component i2c_master_bit_ctrl is
     port (
@@ -1329,14 +1327,15 @@ end architecture structural;
 -- <http://www.gnu.org/licenses/>.
 --**********************************************************************
 
-library IEEE, XESS;
+library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 use IEEE.math_real.all;
-use XESS.CommonPckg.all;
-use XESS.I2CPckg.all;
+use work.CommonPckg.all;
+use work.I2cPckg.all;
 
 entity I2c is
+
   generic(
     FREQ_G     : real := 100.0;         -- Main clock frequency (MHz).
     I2C_FREQ_G : real := 0.1            -- I2C clock frequency (MHz).
