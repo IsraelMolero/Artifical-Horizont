@@ -52,7 +52,8 @@ architecture rtl of i2c_controller is
                      START_COND, SEND_ADDR_W, ACK_ADDR_W,
                      SEND_REG, ACK_REG, RESTART_COND,
                      SEND_ADDR_R, ACK_ADDR_R,
-                     READ_BYTE, ACK_BYTE, STOP_COND, DONE_ST);
+                     READ_BYTE, ACK_BYTE, STOP_COND, DONE_ST,
+                     ERROR_ST, RECOVER_ST);
     signal state : state_t;
     signal next_state_after_cmd : state_t;
 
@@ -66,6 +67,9 @@ architecture rtl of i2c_controller is
     signal byte_count : unsigned(2 downto 0);
     signal accel_data : std_logic_vector(47 downto 0);
     signal wait_counter : unsigned(23 downto 0);
+    signal cmd_timeout_counter : unsigned(23 downto 0);
+    signal recovery_tick_counter : unsigned(15 downto 0);
+    signal recovery_phase : unsigned(4 downto 0);
     signal init_done : std_logic;
 
     -- Señal para debug: estado actual codificado en 4 bits
@@ -80,7 +84,7 @@ begin
         )
         port map(
             clk_i => clk_i,
-            rst_i => rst_i,
+            rst_i => i2c_core_rst,
             addr_i => i2c_addr,
             data_i => i2c_data_in,
             data_o => i2c_data_out,
@@ -101,6 +105,9 @@ begin
                 data_ready_o <= '0';
                 byte_count <= (others => '0');
                 wait_counter <= (others => '0');
+                cmd_timeout_counter <= (others => '0');
+                recovery_tick_counter <= (others => '0');
+                recovery_phase <= (others => '0');
                 init_done <= '0';
                 next_state_after_cmd <= IDLE;
             else
@@ -111,7 +118,7 @@ begin
                 case state is
                     when IDLE =>
                         if init_done = '0' then
-                            state <= INIT_I2C;
+                            state <= INIT_POWER_WAIT;
                             wait_counter <= (others => '0');
                         elsif start_read_i = '1' then
                             state <= START_COND;
@@ -155,6 +162,7 @@ begin
                                 next_state_after_cmd <= INIT_REG;
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
+                                cmd_timeout_counter <= (others => '0');
                             end if;
                         end if;
 
@@ -188,6 +196,7 @@ begin
                                 next_state_after_cmd <= INIT_DATA;
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
+                                cmd_timeout_counter <= (others => '0');
                             end if;
                         end if;
 
@@ -217,6 +226,7 @@ begin
                                 next_state_after_cmd <= INIT_STOP;
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
+                                cmd_timeout_counter <= (others => '0');
                             end if;
                         end if;
 
@@ -232,6 +242,7 @@ begin
                                 next_state_after_cmd <= INIT_WAIT;
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
+                                cmd_timeout_counter <= (others => '0');
                             end if;
                         end if;
 
