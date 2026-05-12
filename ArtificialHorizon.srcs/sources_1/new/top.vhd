@@ -28,37 +28,37 @@ architecture Structural of top is
     signal clk25_s    : STD_LOGIC;
     signal x_s, y_s   : unsigned(9 downto 0);
     signal engine_out : STD_LOGIC;
-    
+
     -- pitch y roll
     signal pitch_s    : unsigned(7 downto 0) := x"00";
     signal roll_s     : unsigned(7 downto 0) := x"00";
-    
+
     -- Señales del sensor BMI160
     -- Salidas de aceleracion en los tres ejes (16 bits complemento a 2)
     signal accel_x_s       : std_logic_vector(15 downto 0);
     signal accel_y_s       : std_logic_vector(15 downto 0);
     signal accel_z_s       : std_logic_vector(15 downto 0);
-    
+
     -- Indica cuando hay datos nuevos disponibles del sensor
     signal data_ready_s    : std_logic;
-    
+
     -- Pulso para iniciar una lectura del sensor
     signal start_read_s    : std_logic;
-    
+
     -- Valor a mostrar en el display de 7 segmentos
     signal display_value_s : unsigned(13 downto 0);
-    
+
     -- Contador para generar pulsos periodicos de lectura del sensor
     -- Con 24 bits a 100MHz genera un pulso cada ~168ms
     signal read_counter    : unsigned(23 downto 0) := (others => '0');
-    
+
     -- Señal auxiliar para ver si la inicializacion completo
 	signal init_done_s : std_logic;
-	
+
 	-- Señal de debug del estado de la maquina
 	signal state_debug_s : std_logic_vector(3 downto 0);
-    
-   
+
+
 begin
 
     -- Divisor de Reloj
@@ -68,24 +68,8 @@ begin
             clk25  => clk25_s
         );
 
-   -- NEW Israel -> Usamos el core y el sensor control del I2C de la liberia que hemos importado
-    U_SENSOR_READER: entity work.bmi160_reader
-        generic map (
-            FREQ_G     => 100.0,
-            I2C_FREQ_G => 0.4
-        )
-        port map (
-            clk_i        => clk,
-            rst_i        => '0',
-            start_read_i => '1',
-            accel_x_o    => accel_x_s,
-            accel_y_o    => accel_y_s,
-            accel_z_o    => open, 
-            data_ready_o => open,
-            scl_io       => scl_io,
-            sda_io       => sda_io
-        );
-
+   -- Lectura del BMI160: usamos un unico controlador I2C para evitar
+   -- multiples drivers sobre accel_x/accel_y y sobre las lineas SCL/SDA.
     pitch_s <= unsigned(accel_x_s(15 downto 8));
     roll_s  <= unsigned(accel_y_s(15 downto 8));
 
@@ -115,7 +99,7 @@ begin
             roll   => roll_s,
             output => engine_out
         );
-        
+
      U_BMI160: entity work.i2c_controller
         generic map (
             FREQ_G     => 100.0,
@@ -136,13 +120,13 @@ begin
         	-- Conexion de debug del estado
 			state_debug_o => state_debug_s
         );
-        
+
 
         -- Debug: mostrar estado de inicializacion y lectura en los LEDs
-		-- LED(15): init_done (deberia encenderse despues de ~4ms)
+		-- LED(15): init_done (tras espera de arranque + configuracion del BMI160)
 		-- LED(14): data_ready (deberia parpadear cada lectura)
 		-- LED(13): start_read (deberia parpadear con read_counter)
-		-- LED(12:9): estado de la maquina de estados (para debug avanzado)
+		-- LED(12:9): estado de la maquina de estados (F = error/recuperacion I2C)
 		-- LED(8:0): primeros 9 bits del dato X
 		led(15) <= '1' when init_done_s = '1' else '0';
 		led(14) <= data_ready_s;
@@ -150,7 +134,7 @@ begin
 		-- Mostrar el estado de la maquina en los LEDs 12-9
 		led(12 downto 9) <= state_debug_s;
 		led(8 downto 0) <= accel_x_s(8 downto 0);
-        
+
 		-- Proceso de generacion de pulsos de lectura periodicos
 		-- Incrementa el contador continuamente
 		-- Cuando el contador vuelve a 0, genera un pulso de un ciclo en start_read_s
@@ -158,7 +142,7 @@ begin
 		begin
 			if rising_edge(clk) then
 				read_counter <= read_counter + 1;
-				
+
 				if read_counter = 0 then
 					start_read_s <= '1';
 				else
@@ -166,7 +150,7 @@ begin
 				end if;
 			end if;
 		end process;
-    
+
     -- Display 7 Segmentos
     display_value_s <= unsigned(accel_x_s(13 downto 0));
     U_7SEG: entity work.seven_segment_display
