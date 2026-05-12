@@ -33,11 +33,6 @@ architecture rtl of i2c_controller is
     constant ACC_NORMAL_MODE : std_logic_vector(7 downto 0) := x"11";
     constant ACCEL_X_LSB : std_logic_vector(7 downto 0) := x"12";
 
-    constant POWER_UP_WAIT_C         : unsigned(23 downto 0) := to_unsigned(10000000, 24); -- 100 ms @ 100 MHz
-    constant I2C_CMD_TIMEOUT_C       : unsigned(23 downto 0) := to_unsigned(2000000, 24);  -- 20 ms @ 100 MHz
-    constant RECOVERY_HALF_PERIOD_C  : unsigned(15 downto 0) := to_unsigned(5000, 16);     -- 50 us @ 100 MHz
-    constant RECOVERY_LAST_PHASE_C   : unsigned(4 downto 0) := to_unsigned(18, 5);         -- 9 pulsos SCL
-
     constant CMD_START : std_logic_vector(7 downto 0) := x"80";
     constant CMD_STOP  : std_logic_vector(7 downto 0) := x"40";
     constant CMD_WRITE : std_logic_vector(7 downto 0) := x"10";
@@ -50,7 +45,7 @@ architecture rtl of i2c_controller is
     constant ADDR_CR     : std_logic_vector(2 downto 0) := "100";
     constant ADDR_SR     : std_logic_vector(2 downto 0) := "100";
 
-    type state_t is (IDLE, INIT_POWER_WAIT, INIT_I2C,
+    type state_t is (IDLE, INIT_I2C,
                      INIT_START, INIT_ADDR_W, INIT_ADDR_ACK,
                      INIT_REG, INIT_REG_ACK, INIT_DATA, INIT_DATA_ACK,
                      INIT_STOP, INIT_WAIT, WAIT_I2C_CMD, WAIT_I2C_EVAL,
@@ -68,8 +63,6 @@ architecture rtl of i2c_controller is
     signal i2c_wr : std_logic;
     signal i2c_rd : std_logic;
     signal i2c_done : std_logic;
-    signal i2c_core_rst : std_logic := '1';
-    signal expect_ack_after_cmd : std_logic;
 
     signal byte_count : unsigned(2 downto 0);
     signal accel_data : std_logic_vector(47 downto 0);
@@ -78,7 +71,6 @@ architecture rtl of i2c_controller is
     signal recovery_tick_counter : unsigned(15 downto 0);
     signal recovery_phase : unsigned(4 downto 0);
     signal init_done : std_logic;
-    signal recovery_drive_scl : std_logic;
 
     -- Señal para debug: estado actual codificado en 4 bits
 	signal state_debug : std_logic_vector(3 downto 0);
@@ -103,10 +95,6 @@ begin
             sda_io => sda_io
         );
 
-    -- Driver adicional solo durante recuperacion: con el core en reset,
-    -- se generan 9 pulsos de SCL para liberar un esclavo que mantenga SDA baja.
-    scl_io <= '0' when recovery_drive_scl = '1' else 'Z';
-
     process(clk_i)
     begin
         if rising_edge(clk_i) then
@@ -122,15 +110,10 @@ begin
                 recovery_phase <= (others => '0');
                 init_done <= '0';
                 next_state_after_cmd <= IDLE;
-                expect_ack_after_cmd <= '0';
-                i2c_core_rst <= '1';
-                recovery_drive_scl <= '0';
             else
                 i2c_wr <= '0';
                 i2c_rd <= '0';
                 data_ready_o <= '0';
-                i2c_core_rst <= '0';
-                recovery_drive_scl <= '0';
 
                 case state is
                     when IDLE =>
@@ -140,15 +123,6 @@ begin
                         elsif start_read_i = '1' then
                             state <= START_COND;
                             byte_count <= (others => '0');
-                            wait_counter <= (others => '0');
-                        end if;
-
-                    -- Esperar a que el BMI160 haya terminado su arranque tras configurar la FPGA.
-                    when INIT_POWER_WAIT =>
-                        if wait_counter < POWER_UP_WAIT_C then
-                            wait_counter <= wait_counter + 1;
-                        else
-                            state <= INIT_I2C;
                             wait_counter <= (others => '0');
                         end if;
 
@@ -186,7 +160,6 @@ begin
                             i2c_wr <= '1';
                             if i2c_done = '1' then
                                 next_state_after_cmd <= INIT_REG;
-                                expect_ack_after_cmd <= '1';
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
                                 cmd_timeout_counter <= (others => '0');
@@ -221,7 +194,6 @@ begin
                             i2c_wr <= '1';
                             if i2c_done = '1' then
                                 next_state_after_cmd <= INIT_DATA;
-                                expect_ack_after_cmd <= '1';
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
                                 cmd_timeout_counter <= (others => '0');
@@ -252,7 +224,6 @@ begin
                             i2c_wr <= '1';
                             if i2c_done = '1' then
                                 next_state_after_cmd <= INIT_STOP;
-                                expect_ack_after_cmd <= '1';
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
                                 cmd_timeout_counter <= (others => '0');
@@ -269,7 +240,6 @@ begin
                             i2c_wr <= '1';
                             if i2c_done = '1' then
                                 next_state_after_cmd <= INIT_WAIT;
-                                expect_ack_after_cmd <= '0';
                                 state <= WAIT_I2C_CMD;
                                 wait_counter <= (others => '0');
                                 cmd_timeout_counter <= (others => '0');
@@ -288,32 +258,21 @@ begin
                     -- Esperar a que termine el comando I2C real (bit TIP del SR = 0).
                     -- done_o del wrapper solo confirma la transaccion Wishbone, no el byte en el bus I2C.
                     when WAIT_I2C_CMD =>
-                        if cmd_timeout_counter >= I2C_CMD_TIMEOUT_C then
-                            state <= ERROR_ST;
+                        if wait_counter < 2 then
+                            wait_counter <= wait_counter + 1;
                         else
-                            cmd_timeout_counter <= cmd_timeout_counter + 1;
-                            if wait_counter < 2 then
-                                wait_counter <= wait_counter + 1;
-                            else
-                                i2c_addr <= ADDR_SR;
-                                i2c_rd <= '1';
-                                if i2c_done = '1' then
-                                    state <= WAIT_I2C_EVAL;
-                                end if;
+                            i2c_addr <= ADDR_SR;
+                            i2c_rd <= '1';
+                            if i2c_done = '1' then
+                                state <= WAIT_I2C_EVAL;
                             end if;
                         end if;
 
                     -- Evaluar el SR un ciclo despues del ACK Wishbone para usar data_o ya actualizado.
                     when WAIT_I2C_EVAL =>
                         if i2c_data_out(1) = '0' then
-                            if expect_ack_after_cmd = '1' and i2c_data_out(7) = '1' then
-                                -- NACK del BMI160: no damos init_done ni seguimos leyendo con el bus ocupado.
-                                state <= ERROR_ST;
-                            else
-                                state <= next_state_after_cmd;
-                                wait_counter <= (others => '0');
-                                cmd_timeout_counter <= (others => '0');
-                            end if;
+                            state <= next_state_after_cmd;
+                            wait_counter <= (others => '0');
                         else
                             state <= WAIT_I2C_CMD;
                         end if;
@@ -334,10 +293,8 @@ begin
                         i2c_wr <= '1';
                         if i2c_done = '1' then
                             next_state_after_cmd <= SEND_REG;
-                            expect_ack_after_cmd <= '1';
                             state <= WAIT_I2C_CMD;
                             wait_counter <= (others => '0');
-                            cmd_timeout_counter <= (others => '0');
                         end if;
 
                     -- Estado mantenido para compatibilidad con debug; no se usa en el flujo normal.
@@ -360,10 +317,8 @@ begin
                         i2c_wr <= '1';
                         if i2c_done = '1' then
                             next_state_after_cmd <= SEND_ADDR_R;
-                            expect_ack_after_cmd <= '1';
                             state <= WAIT_I2C_CMD;
                             wait_counter <= (others => '0');
-                            cmd_timeout_counter <= (others => '0');
                         end if;
 
                     -- Generar condicion RESTART (START repetido)
@@ -373,10 +328,8 @@ begin
                         i2c_wr <= '1';
                         if i2c_done = '1' then
                             next_state_after_cmd <= READ_BYTE;
-                            expect_ack_after_cmd <= '1';
                             state <= WAIT_I2C_CMD;
                             wait_counter <= (others => '0');
-                            cmd_timeout_counter <= (others => '0');
                         end if;
 
                     -- Cargar direccion I2C en modo lectura al TXR
@@ -406,10 +359,8 @@ begin
                         i2c_wr <= '1';
                         if i2c_done = '1' then
                             next_state_after_cmd <= ACK_BYTE;
-                            expect_ack_after_cmd <= '0';
                             state <= WAIT_I2C_CMD;
                             wait_counter <= (others => '0');
-                            cmd_timeout_counter <= (others => '0');
                         end if;
 
                     -- Leer el byte recibido del registro TXR
@@ -436,10 +387,8 @@ begin
                         i2c_wr <= '1';
                         if i2c_done = '1' then
                             next_state_after_cmd <= DONE_ST;
-                            expect_ack_after_cmd <= '0';
                             state <= WAIT_I2C_CMD;
                             wait_counter <= (others => '0');
-                            cmd_timeout_counter <= (others => '0');
                         end if;
 
                     -- Transferir datos leidos a las salidas y señalizar lectura completa
@@ -450,60 +399,25 @@ begin
                         data_ready_o <= '1';
                         state <= IDLE;
 
-                    -- Error por NACK/timeout: apagar init_done y reiniciar el core antes de reintentar.
-                    when ERROR_ST =>
-                        init_done <= '0';
-                        i2c_core_rst <= '1';
-                        recovery_drive_scl <= '0';
-                        recovery_tick_counter <= (others => '0');
-                        recovery_phase <= (others => '0');
-                        wait_counter <= (others => '0');
-                        cmd_timeout_counter <= (others => '0');
-                        state <= RECOVER_ST;
-
-                    -- Recuperacion de bus I2C: 9 pulsos de SCL con SDA liberada y el core en reset.
-                    when RECOVER_ST =>
-                        i2c_core_rst <= '1';
-                        if recovery_phase < RECOVERY_LAST_PHASE_C then
-                            if recovery_phase(0) = '0' then
-                                recovery_drive_scl <= '1';
-                            else
-                                recovery_drive_scl <= '0';
-                            end if;
-
-                            if recovery_tick_counter < RECOVERY_HALF_PERIOD_C then
-                                recovery_tick_counter <= recovery_tick_counter + 1;
-                            else
-                                recovery_tick_counter <= (others => '0');
-                                recovery_phase <= recovery_phase + 1;
-                            end if;
-                        else
-                            recovery_drive_scl <= '0';
-                            state <= IDLE;
-                            wait_counter <= (others => '0');
-                        end if;
-
                 end case;
 
                 -- Casos de debug para i2c: evitar que estados normales caigan en x"F".
                 case state is
                     when IDLE => state_debug <= x"0";
-                    when INIT_POWER_WAIT => state_debug <= x"1";
-                    when INIT_I2C => state_debug <= x"2";
-                    when INIT_ADDR_W => state_debug <= x"3";
-                    when INIT_START => state_debug <= x"4";
-                    when INIT_REG => state_debug <= x"5";
-                    when INIT_REG_ACK => state_debug <= x"6";
-                    when INIT_DATA => state_debug <= x"7";
-                    when INIT_DATA_ACK => state_debug <= x"8";
-                    when INIT_STOP => state_debug <= x"9";
-                    when INIT_WAIT => state_debug <= x"A";
-                    when WAIT_I2C_CMD | WAIT_I2C_EVAL => state_debug <= x"B";
-                    when START_COND | SEND_ADDR_W => state_debug <= x"C";
-                    when SEND_REG | ACK_REG => state_debug <= x"D";
-                    when SEND_ADDR_R | RESTART_COND => state_debug <= x"E";
+                    when INIT_I2C => state_debug <= x"1";
+                    when INIT_ADDR_W => state_debug <= x"2";
+                    when INIT_START => state_debug <= x"3";
+                    when INIT_REG => state_debug <= x"4";
+                    when INIT_REG_ACK => state_debug <= x"5";
+                    when INIT_DATA => state_debug <= x"6";
+                    when INIT_DATA_ACK => state_debug <= x"7";
+                    when INIT_STOP => state_debug <= x"8";
+                    when INIT_WAIT => state_debug <= x"9";
+                    when WAIT_I2C_CMD | WAIT_I2C_EVAL => state_debug <= x"A";
+                    when START_COND | SEND_ADDR_W => state_debug <= x"B";
+                    when SEND_REG | ACK_REG => state_debug <= x"C";
+                    when SEND_ADDR_R | RESTART_COND => state_debug <= x"D";
                     when READ_BYTE | ACK_BYTE | STOP_COND | DONE_ST => state_debug <= x"E";
-                    when ERROR_ST | RECOVER_ST => state_debug <= x"F";
                     when others => state_debug <= x"F";
                 end case;
 
