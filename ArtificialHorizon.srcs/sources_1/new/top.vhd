@@ -123,10 +123,10 @@ begin
 
 
         -- Debug: mostrar estado de inicializacion y lectura en los LEDs
-		-- LED(15): init_done (deberia encenderse despues de ~4ms)
+		-- LED(15): init_done (tras espera de arranque + configuracion del BMI160)
 		-- LED(14): data_ready (deberia parpadear cada lectura)
 		-- LED(13): start_read (deberia parpadear con read_counter)
-		-- LED(12:9): estado de la maquina de estados (para debug avanzado)
+		-- LED(12:9): estado de la maquina de estados (F = error/recuperacion I2C)
 		-- LED(8:0): primeros 9 bits del dato X
 		led(15) <= '1' when init_done_s = '1' else '0';
 		led(14) <= data_ready_s;
